@@ -13,7 +13,7 @@ A persistent, self-hosted YouTube player that runs entirely in the browser.
 ## **📦 How to Deploy to GitHub Pages**
 
 1. **Create a Repository:**  
-   * Go to GitHub and create a new public repository (e.g., my-streamhost).  
+   * Go to GitHub and create a new public repository (e.g., my-Youtube Restream (YT-RS)).  
 2. **Upload Files:**  
    * Upload the index.html file to the root.  
    * Create a folder named static.  
@@ -24,7 +24,7 @@ A persistent, self-hosted YouTube player that runs entirely in the browser.
    * Click **Save**.  
 4. **Visit your Site:**  
    * Wait 1-2 minutes.  
-   * Your site will be live at: https://yourusername.github.io/my-streamhost/
+   * Your site will be live at: https://yourusername.github.io/my-Youtube Restream (YT-RS)/
 
 ## **🖥️ Local Usage**
 
