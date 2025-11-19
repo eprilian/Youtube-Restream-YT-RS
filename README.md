@@ -1,6 +1,6 @@
 # **Youtube Restream (YT-RS) 📺**
 
-**StreamHost** is a powerful, distraction-free YouTube player wrapper that gives you control over playback quality, playlists, and session persistence.
+**YT-RS** is a powerful, distraction-free YouTube player wrapper that gives you control over playback quality, playlists, and session persistence.
 
 This repository contains **two versions** of the application. Choose the one that fits your needs:
 
