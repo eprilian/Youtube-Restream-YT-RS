@@ -1,0 +1,10 @@
+# Dependencies
+node_modules/
+
+# Local Database (Session Data)
+session.db
+
+# Package Manager Files
+# Note: Usually these are committed, but ignored per your request.
+package.json
+package-lock.json

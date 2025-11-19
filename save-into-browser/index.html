@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamHost Lite</title>
+    
+    <!-- Link to CSS -->
+    <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+
+    <!-- Video Background -->
+    <div id="player-wrapper">
+        <div id="video-placeholder"></div>
+    </div>
+    
+    <!-- Toast Notification -->
+    <div id="toast-msg">Notification</div>
+
+    <!-- Playlist Sidebar -->
+    <div id="playlist-drawer">
+        <div class="playlist-header">
+            <span>PLAYLIST</span>
+            <span class="close-drawer" id="close-drawer-btn">&times;</span>
+        </div>
+        <div class="playlist-items" id="playlist-items-container">
+            <div style="padding:20px; color:#666; text-align:center;">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Center Loader Overlay -->
+    <div id="center-overlay">
+        <div class="input-box">
+            <h2>MEDIA LOADER</h2>
+            <div class="input-row">
+                <input type="text" class="url-field" id="url-input" placeholder="Paste YouTube Link">
+                <select id="initial-quality" class="quality-pre-select">
+                    <option value="auto">Auto</option>
+                    <option value="hd1080">1080p</option>
+                    <option value="hd720">720p</option>
+                    <option value="large">480p</option>
+                </select>
+            </div>
+            <button class="load-btn" id="load-btn">LOAD SOURCE</button>
+            <div id="resume-btn-container" style="display:none; margin-top:15px;">
+                <small style="color:#666;">or</small><br>
+                <button id="resume-btn" class="load-btn" style="background:transparent; border:1px solid #555; margin-top:5px;">RESUME SESSION</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Control Bar -->
+    <div id="controls-layer">
+        <div class="progress-container">
+            <input type="range" class="scrubber" id="progress-bar" value="0" min="0" max="100" step="0.1">
+        </div>
+
+        <div class="buttons-row">
+            <!-- Left Controls -->
+            <div class="left-controls">
+                <button class="icon-btn" id="prev-btn"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
+                
+                <button class="icon-btn" id="play-btn">
+                    <svg id="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    <svg id="icon-pause" style="display:none;" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                </button>
+                
+                <button class="icon-btn" id="next-btn"><svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
+                <div class="time-display"><span id="curr-time">00:00</span> / <span id="total-time">00:00</span></div>
+            </div>
+
+            <!-- Center Clock -->
+            <div id="live-clock" class="live-clock">12:00:00 PM</div>
+
+            <!-- Right Controls -->
+            <div class="right-controls">
+                <button class="icon-btn" id="playlist-btn" style="display:none;" title="Playlist">
+                    <svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+                </button>
+                
+                <button class="icon-btn" id="fullscreen-btn" title="Fullscreen (F)">
+                    <svg id="icon-fs-enter" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                    <svg id="icon-fs-exit" style="display:none;" viewBox="0 0 24 24"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>
+                </button>
+
+                <button class="icon-btn" id="open-menu-btn" title="New Source">
+                    <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logic Script -->
+    <script src="static/script.js"></script>
+    
+</body>
+</html>
