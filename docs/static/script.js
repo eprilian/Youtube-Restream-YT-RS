@@ -22,7 +22,7 @@ var updateInterval;
 var isDraggingScrubber = false;
 var isPlaylist = false;
 var activeConfig = null;
-const STORAGE_KEY = 'streamhost_lite_v1';
+const STORAGE_KEY = 'streamhost_play';
 
 // --- 4. LOCAL STORAGE PERSISTENCE ---
 
@@ -45,8 +45,6 @@ function loadSavedState() {
     if (saved) {
         try {
             const state = JSON.parse(saved);
-            // Only auto-resume if the data isn't ancient (e.g., 7 days)
-            // But user requested "continue last video", so we do it always.
             console.log("Found Saved Session:", state);
             return state;
         } catch(e) {
@@ -140,8 +138,14 @@ function onPlayerReady(event) {
         closeDrawer();
     }
 
-    // Auto-save loop (Every 1 second)
-    setInterval(saveState, 1000);
+    // --- HEARTBEAT: SAVE EVERY 1 SECOND WHILE PLAYING ---
+    // This ensures progress is saved constantly to LocalStorage
+    setInterval(() => {
+        if (player && player.getPlayerState && player.getPlayerState() === 1) { // 1 = Playing
+            saveState();
+        }
+    }, 1000);
+    // ----------------------------------------------------
 }
 
 function onPlayerStateChange(event) {
@@ -170,7 +174,6 @@ document.addEventListener('keydown', (e) => {
     
     const key = e.key.toLowerCase();
     
-    // F key for Fullscreen
     if (key === 'f') toggleFullscreen();
     
     if (key === 'k' || e.code === 'Space') {
@@ -181,10 +184,10 @@ document.addEventListener('keydown', (e) => {
         if(player.isMuted()) { player.unMute(); showToast("Unmuted"); } else { player.mute(); showToast("Muted"); }
     }
     if (e.code === 'ArrowRight') { 
-        player.seekTo(player.getCurrentTime() + 10); showToast("+10s");
+        player.seekTo(player.getCurrentTime() + 10); showToast("+10s"); saveState();
     }
     if (e.code === 'ArrowLeft') { 
-        player.seekTo(player.getCurrentTime() - 10); showToast("-10s");
+        player.seekTo(player.getCurrentTime() - 10); showToast("-10s"); saveState();
     }
 });
 
@@ -193,10 +196,10 @@ document.getElementById('play-btn').addEventListener('click', () => {
     if(player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo();
 });
 document.getElementById('prev-btn').addEventListener('click', () => {
-    if(player.previousVideo) player.previousVideo(); else player.seekTo(0);
+    if(player.previousVideo) player.previousVideo(); else player.seekTo(0); saveState();
 });
 document.getElementById('next-btn').addEventListener('click', () => {
-    if(player.nextVideo) player.nextVideo();
+    if(player.nextVideo) player.nextVideo(); saveState();
 });
 
 // Load Button
@@ -325,6 +328,7 @@ progressBar.addEventListener('change', (e) => {
     isDraggingScrubber = false;
     if(player) {
         player.seekTo(player.getDuration() * (e.target.value / 100), true);
+        saveState();
     }
 });
 
@@ -333,5 +337,5 @@ function formatTime(s) { if (!s) return "00:00"; s = Math.floor(s); return `${Ma
 function showToast(msg) { const toast = document.getElementById('toast-msg'); toast.innerText = msg; toast.style.opacity = 1; setTimeout(() => { toast.style.opacity = 0; }, 3000); }
 let idleTimer; document.onmousemove = function() { document.body.classList.remove('idle'); clearTimeout(idleTimer); idleTimer = setTimeout(() => document.body.classList.add('idle'), 3000); };
 
-// Force save when closing tab
+// Force save on close
 window.addEventListener('beforeunload', () => { saveState(); });
