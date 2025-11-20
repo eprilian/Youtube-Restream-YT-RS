@@ -1,0 +1,337 @@
+// --- 1. CLOCK (12-HOUR) ---
+function updateLiveClock() {
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('en-US', { 
+        hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true 
+    });
+    document.getElementById('live-clock').innerText = timeString;
+}
+setInterval(updateLiveClock, 1000);
+updateLiveClock();
+
+// --- 2. YOUTUBE API LOADER ---
+var tag = document.createElement('script');
+tag.src = "https://www.youtube.com/iframe_api";
+var firstScriptTag = document.getElementsByTagName('script')[0];
+firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+// --- 3. GLOBAL VARIABLES ---
+var player;
+var isPlayerReady = false;
+var updateInterval;
+var isDraggingScrubber = false;
+var isPlaylist = false;
+var activeConfig = null;
+const STORAGE_KEY = 'streamhost_lite_v1';
+
+// --- 4. LOCAL STORAGE PERSISTENCE ---
+
+function saveState() {
+    if (!player || !isPlayerReady || !activeConfig) return;
+    
+    try {
+        const currentState = {
+            config: activeConfig,
+            timestamp: player.getCurrentTime(),
+            playlistIndex: isPlaylist ? player.getPlaylistIndex() : 0,
+            lastSaved: Date.now()
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(currentState));
+    } catch (e) {}
+}
+
+function loadSavedState() {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+        try {
+            const state = JSON.parse(saved);
+            // Only auto-resume if the data isn't ancient (e.g., 7 days)
+            // But user requested "continue last video", so we do it always.
+            console.log("Found Saved Session:", state);
+            return state;
+        } catch(e) {
+            localStorage.removeItem(STORAGE_KEY);
+        }
+    }
+    return null;
+}
+
+function restoreSession(state) {
+    // Inject saved time back into config
+    state.config.startSeconds = state.timestamp;
+    state.config.playlistIndex = state.playlistIndex;
+    
+    // Update UI
+    document.getElementById('url-input').value = ""; 
+    if(state.config.quality) document.getElementById('initial-quality').value = state.config.quality;
+
+    showToast("Resuming Last Session...");
+    initPlayer(state.config);
+    document.getElementById('center-overlay').classList.add('hidden');
+}
+
+// API Entry Point
+function onYouTubeIframeAPIReady() {
+    const state = loadSavedState();
+    if (state) {
+        restoreSession(state);
+    }
+}
+
+// --- 5. PLAYER LOGIC ---
+function initPlayer(config) {
+    if (player) player.destroy();
+    activeConfig = config;
+
+    const wrapper = document.getElementById('player-wrapper');
+    wrapper.innerHTML = '<div id="video-placeholder"></div>';
+
+    let playerVars = {
+        'autoplay': 1, 'controls': 0, 'showinfo': 0, 
+        'rel': 0, 'fs': 0, 'iv_load_policy': 3,
+        'origin': window.location.origin,
+        'start': Math.floor(config.startSeconds || 0)
+    };
+
+    if (config.quality && config.quality !== 'auto') {
+        playerVars['vq'] = config.quality;
+    }
+
+    let apiConfig = {
+        height: '100%', width: '100%',
+        playerVars: playerVars,
+        events: {
+            'onReady': onPlayerReady,
+            'onStateChange': onPlayerStateChange,
+            'onError': (e) => showToast("Error: " + e.data)
+        }
+    };
+
+    if (config.type === 'playlist') {
+        isPlaylist = true;
+        playerVars['listType'] = 'playlist';
+        playerVars['list'] = config.id;
+        if (config.playlistIndex) playerVars['index'] = config.playlistIndex;
+    } else {
+        isPlaylist = false;
+        apiConfig.videoId = config.id;
+    }
+
+    player = new YT.Player('video-placeholder', apiConfig);
+}
+
+function onPlayerReady(event) {
+    isPlayerReady = true;
+    startProgressLoop();
+    player.unMute();
+    
+    // Force Quality backup
+    if(activeConfig.quality && activeConfig.quality !== 'auto') {
+        player.setPlaybackQuality(activeConfig.quality);
+    }
+
+    // UI Setup
+    const plBtn = document.getElementById('playlist-btn');
+    if (isPlaylist) {
+        plBtn.style.display = 'block';
+        setTimeout(fetchPlaylistData, 2000);
+    } else {
+        plBtn.style.display = 'none';
+        closeDrawer();
+    }
+
+    // Auto-save loop (Every 1 second)
+    setInterval(saveState, 1000);
+}
+
+function onPlayerStateChange(event) {
+    const iconPlay = document.getElementById('icon-play');
+    const iconPause = document.getElementById('icon-pause');
+
+    if (event.data == YT.PlayerState.PLAYING) {
+        iconPlay.style.display = 'none'; iconPause.style.display = 'block';
+        document.getElementById('center-overlay').classList.add('hidden');
+        updateActiveTrack();
+    } 
+    else if (event.data == YT.PlayerState.PAUSED) {
+        iconPlay.style.display = 'block'; iconPause.style.display = 'none';
+        saveState(); // Force save immediately on pause
+    }
+    else {
+        iconPlay.style.display = 'block'; iconPause.style.display = 'none';
+    }
+}
+
+// --- 6. UI EVENTS & CONTROLS ---
+
+// Keyboard Controls
+document.addEventListener('keydown', (e) => {
+    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') return;
+    
+    const key = e.key.toLowerCase();
+    
+    // F key for Fullscreen
+    if (key === 'f') toggleFullscreen();
+    
+    if (key === 'k' || e.code === 'Space') {
+        e.preventDefault();
+        if(player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo();
+    }
+    if (key === 'm') {
+        if(player.isMuted()) { player.unMute(); showToast("Unmuted"); } else { player.mute(); showToast("Muted"); }
+    }
+    if (e.code === 'ArrowRight') { 
+        player.seekTo(player.getCurrentTime() + 10); showToast("+10s");
+    }
+    if (e.code === 'ArrowLeft') { 
+        player.seekTo(player.getCurrentTime() - 10); showToast("-10s");
+    }
+});
+
+// Buttons
+document.getElementById('play-btn').addEventListener('click', () => {
+    if(player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo();
+});
+document.getElementById('prev-btn').addEventListener('click', () => {
+    if(player.previousVideo) player.previousVideo(); else player.seekTo(0);
+});
+document.getElementById('next-btn').addEventListener('click', () => {
+    if(player.nextVideo) player.nextVideo();
+});
+
+// Load Button
+document.getElementById('load-btn').addEventListener('click', () => {
+    const url = document.getElementById('url-input').value;
+    const quality = document.getElementById('initial-quality').value;
+    
+    if (!url) return;
+    
+    const listMatch = url.match(/[?&]list=([^#\&\?]+)/);
+    const vidMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+
+    let config;
+    if (listMatch) config = { type: 'playlist', id: listMatch[1], quality: quality };
+    else if (vidMatch) config = { type: 'video', id: vidMatch[1], quality: quality };
+    else { showToast("Invalid Link"); return; }
+
+    initPlayer(config);
+    document.getElementById('center-overlay').classList.add('hidden');
+});
+
+// Manual Resume Button (In case auto-load failed or was cancelled)
+document.getElementById('resume-btn').addEventListener('click', () => {
+    const state = loadSavedState();
+    if(state) restoreSession(state);
+});
+
+// Menu Open
+document.getElementById('open-menu-btn').addEventListener('click', () => {
+    document.getElementById('center-overlay').classList.remove('hidden');
+    // Check if we have a save to show the resume button
+    if(loadSavedState()) {
+        document.getElementById('resume-btn-container').style.display = 'block';
+    }
+});
+
+// Fullscreen
+const fsBtn = document.getElementById('fullscreen-btn');
+function toggleFullscreen() {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+    else if (document.exitFullscreen) document.exitFullscreen();
+}
+function updateFsIcon() {
+    const enter = document.getElementById('icon-fs-enter');
+    const exit = document.getElementById('icon-fs-exit');
+    if (document.fullscreenElement) { enter.style.display = 'none'; exit.style.display = 'block'; }
+    else { enter.style.display = 'block'; exit.style.display = 'none'; }
+}
+fsBtn.addEventListener('click', toggleFullscreen);
+document.addEventListener('fullscreenchange', updateFsIcon);
+
+// Playlist Drawer
+function fetchPlaylistData() {
+    if (!player || !player.getPlaylist) return;
+    const playlistIds = player.getPlaylist();
+    const container = document.getElementById('playlist-items-container');
+    container.innerHTML = '';
+    
+    if (!playlistIds || playlistIds.length === 0) {
+        container.innerHTML = '<div style="padding:20px; text-align:center;">Playlist info unavailable</div>';
+        return;
+    }
+
+    playlistIds.forEach((vidId, index) => {
+        const div = document.createElement('div'); div.className = 'track-item'; div.id = 'track-' + index;
+        div.onclick = () => { player.playVideoAt(index); updateActiveTrack(index); };
+        
+        const img = document.createElement('img'); img.src = `https://i.ytimg.com/vi/${vidId}/mqdefault.jpg`; img.className = 'track-thumb';
+        const info = document.createElement('div'); info.className = 'track-info'; info.innerText = `Track #${index + 1}`;
+        
+        div.appendChild(img); div.appendChild(info); container.appendChild(div);
+    });
+    updateActiveTrack();
+}
+
+function updateActiveTrack(forceIndex = -1) {
+    if(!isPlaylist) return;
+    document.querySelectorAll('.track-item').forEach(el => el.classList.remove('active'));
+    
+    let currentIndex = 0;
+    try { currentIndex = (forceIndex >= 0) ? forceIndex : player.getPlaylistIndex(); } catch(e) {}
+    
+    const activeEl = document.getElementById('track-' + currentIndex);
+    if (activeEl) {
+        activeEl.classList.add('active');
+        if(document.getElementById('playlist-drawer').classList.contains('open')) {
+            activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+}
+
+// Drawer Toggles
+function closeDrawer() { document.getElementById('playlist-drawer').classList.remove('open'); document.getElementById('playlist-btn').classList.remove('active'); }
+document.getElementById('playlist-btn').addEventListener('click', () => {
+    const drawer = document.getElementById('playlist-drawer');
+    const btn = document.getElementById('playlist-btn');
+    if (drawer.classList.contains('open')) { closeDrawer(); } 
+    else { drawer.classList.add('open'); btn.classList.add('active'); updateActiveTrack(); }
+});
+document.getElementById('close-drawer-btn').addEventListener('click', closeDrawer);
+
+// --- 7. SCRUBBER ---
+const progressBar = document.getElementById('progress-bar');
+const currTimeEl = document.getElementById('curr-time');
+const totalTimeEl = document.getElementById('total-time');
+
+function startProgressLoop() {
+    if(updateInterval) clearInterval(updateInterval);
+    updateInterval = setInterval(() => {
+        if (!player || !player.getCurrentTime || isDraggingScrubber) return;
+        try {
+            if (player.getPlayerState() === YT.PlayerState.PLAYING) {
+                const current = player.getCurrentTime(); const duration = player.getDuration();
+                if (duration) {
+                    progressBar.value = (current / duration) * 100;
+                    currTimeEl.innerText = formatTime(current);
+                    totalTimeEl.innerText = formatTime(duration);
+                }
+            }
+        } catch(e){}
+    }, 500);
+}
+
+progressBar.addEventListener('input', () => { isDraggingScrubber = true; });
+progressBar.addEventListener('change', (e) => {
+    isDraggingScrubber = false;
+    if(player) {
+        player.seekTo(player.getDuration() * (e.target.value / 100), true);
+    }
+});
+
+// Helpers
+function formatTime(s) { if (!s) return "00:00"; s = Math.floor(s); return `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`; }
+function showToast(msg) { const toast = document.getElementById('toast-msg'); toast.innerText = msg; toast.style.opacity = 1; setTimeout(() => { toast.style.opacity = 0; }, 3000); }
+let idleTimer; document.onmousemove = function() { document.body.classList.remove('idle'); clearTimeout(idleTimer); idleTimer = setTimeout(() => document.body.classList.add('idle'), 3000); };
+
+// Force save when closing tab
+window.addEventListener('beforeunload', () => { saveState(); });
