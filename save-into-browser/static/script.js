@@ -22,6 +22,7 @@ var updateInterval;
 var isDraggingScrubber = false;
 var isPlaylist = false;
 var activeConfig = null;
+var lastKnownPlaylistIndex = -1;
 const STORAGE_KEY = 'streamhost_last_time';
 
 // --- 4. LOCAL STORAGE PERSISTENCE ---
@@ -30,13 +31,22 @@ function saveState() {
     if (!player || !isPlayerReady || !activeConfig) return;
     
     try {
+        // Get current index safely
+        let currentIndex = 0;
+        if (isPlaylist && player.getPlaylistIndex) {
+            currentIndex = player.getPlaylistIndex();
+        }
+
         const currentState = {
-            config: activeConfig,
+            config: activeConfig, // contains 'mode'
             timestamp: player.getCurrentTime(),
-            playlistIndex: isPlaylist ? player.getPlaylistIndex() : 0,
-            lastSaved: Date.now()
+            duration: player.getDuration(), // IMPORTANT: Save total duration for loop math
+            playlistIndex: currentIndex,
+            lastSaved: Date.now() // Save exact real-world time
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(currentState));
+        
+        lastKnownPlaylistIndex = currentIndex;
     } catch (e) {}
 }
 
@@ -55,15 +65,34 @@ function loadSavedState() {
 }
 
 function restoreSession(state) {
-    // Inject saved time back into config
-    state.config.startSeconds = state.timestamp;
+    let startSeconds = state.timestamp;
+
+    // --- LIVE MODE MATH ---
+    if (state.config.mode === 'live') {
+        const now = Date.now();
+        const lastSaved = state.lastSaved;
+        const timeElapsed = (now - lastSaved) / 1000; // Convert ms to seconds
+
+        console.log(`Live Mode: +${timeElapsed.toFixed(1)}s elapsed since close.`);
+
+        startSeconds = state.timestamp + timeElapsed;
+
+        // Handle Loop if duration is known
+        if (state.duration > 0) {
+            startSeconds = startSeconds % state.duration;
+        }
+    }
+    // ----------------------
+
+    state.config.startSeconds = startSeconds;
     state.config.playlistIndex = state.playlistIndex;
     
     // Update UI
     document.getElementById('url-input').value = ""; 
     if(state.config.quality) document.getElementById('initial-quality').value = state.config.quality;
+    document.getElementById('mode-indicator').innerText = state.config.mode || "RESUME";
 
-    showToast("Resuming Last Session...");
+    showToast("Resuming Session (" + (state.config.mode || "RESUME") + ")");
     initPlayer(state.config);
     document.getElementById('center-overlay').classList.add('hidden');
 }
@@ -80,6 +109,10 @@ function onYouTubeIframeAPIReady() {
 function initPlayer(config) {
     if (player) player.destroy();
     activeConfig = config;
+    lastKnownPlaylistIndex = config.playlistIndex || 0;
+
+    // Update Indicator
+    document.getElementById('mode-indicator').innerText = config.mode || "RESUME";
 
     const wrapper = document.getElementById('player-wrapper');
     wrapper.innerHTML = '<div id="video-placeholder"></div>';
@@ -109,7 +142,9 @@ function initPlayer(config) {
         isPlaylist = true;
         playerVars['listType'] = 'playlist';
         playerVars['list'] = config.id;
-        if (config.playlistIndex) playerVars['index'] = config.playlistIndex;
+        if (config.playlistIndex !== undefined) {
+            playerVars['index'] = config.playlistIndex;
+        }
     } else {
         isPlaylist = false;
         apiConfig.videoId = config.id;
@@ -123,12 +158,10 @@ function onPlayerReady(event) {
     startProgressLoop();
     player.unMute();
     
-    // Force Quality backup
     if(activeConfig.quality && activeConfig.quality !== 'auto') {
         player.setPlaybackQuality(activeConfig.quality);
     }
 
-    // UI Setup
     const plBtn = document.getElementById('playlist-btn');
     if (isPlaylist) {
         plBtn.style.display = 'block';
@@ -138,36 +171,24 @@ function onPlayerReady(event) {
         closeDrawer();
     }
 
-    // // --- HEARTBEAT: SAVE EVERY 1 SECOND WHILE PLAYING ---
-    // // This ensures progress is saved constantly to LocalStorage
-    // setInterval(() => {
-    //     if (player && player.getPlayerState && player.getPlayerState() === 1) { // 1 = Playing
-    //         saveState();
-    //     }
-    // }, 1000);
-
-    // --- HEARTBEAT & INDEX WATCHER ---
+    // --- HEARTBEAT ---
     setInterval(() => {
         if (player && player.getPlayerState) {
-            // 1. Standard Heartbeat (Save time while playing)
+            // 1. Save every 1 second if playing
             if (player.getPlayerState() === 1) { 
                 saveState();
             }
-            
-            // 2. Playlist Index Watcher (Save immediately if track changes)
+            // 2. Detect Playlist Track Change
             if (isPlaylist) {
                 const actualIndex = player.getPlaylistIndex();
                 if (actualIndex !== -1 && actualIndex !== lastKnownPlaylistIndex) {
-                    console.log("Track changed detected. Saving state.");
                     lastKnownPlaylistIndex = actualIndex;
-                    saveState(); // Force save
-                    updateActiveTrack(); // Update UI sidebar
+                    saveState();
+                    updateActiveTrack();
                 }
             }
         }
-    }, 1000);    
-
-    // ----------------------------------------------------
+    }, 1000);
 }
 
 function onPlayerStateChange(event) {
@@ -181,7 +202,10 @@ function onPlayerStateChange(event) {
     } 
     else if (event.data == YT.PlayerState.PAUSED) {
         iconPlay.style.display = 'block'; iconPause.style.display = 'none';
-        saveState(); // Force save immediately on pause
+        saveState();
+    }
+    else if (event.data == YT.PlayerState.BUFFERING) {
+        saveState();
     }
     else {
         iconPlay.style.display = 'block'; iconPause.style.display = 'none';
@@ -190,14 +214,12 @@ function onPlayerStateChange(event) {
 
 // --- 6. UI EVENTS & CONTROLS ---
 
-// Keyboard Controls
+// Keyboard
 document.addEventListener('keydown', (e) => {
     if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') return;
     
     const key = e.key.toLowerCase();
-    
     if (key === 'f') toggleFullscreen();
-    
     if (key === 'k' || e.code === 'Space') {
         e.preventDefault();
         if(player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo();
@@ -224,10 +246,12 @@ document.getElementById('next-btn').addEventListener('click', () => {
     if(player.nextVideo) player.nextVideo(); saveState();
 });
 
-// Load Button
+// LOAD BUTTON
 document.getElementById('load-btn').addEventListener('click', () => {
     const url = document.getElementById('url-input').value;
     const quality = document.getElementById('initial-quality').value;
+    // Get Mode
+    const mode = document.querySelector('input[name="playmode"]:checked').value;
     
     if (!url) return;
     
@@ -235,24 +259,23 @@ document.getElementById('load-btn').addEventListener('click', () => {
     const vidMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
 
     let config;
-    if (listMatch) config = { type: 'playlist', id: listMatch[1], quality: quality };
-    else if (vidMatch) config = { type: 'video', id: vidMatch[1], quality: quality };
+    if (listMatch) config = { type: 'playlist', id: listMatch[1], quality: quality, mode: mode };
+    else if (vidMatch) config = { type: 'video', id: vidMatch[1], quality: quality, mode: mode };
     else { showToast("Invalid Link"); return; }
 
     initPlayer(config);
     document.getElementById('center-overlay').classList.add('hidden');
 });
 
-// Manual Resume Button (In case auto-load failed or was cancelled)
+// Resume Button
 document.getElementById('resume-btn').addEventListener('click', () => {
     const state = loadSavedState();
     if(state) restoreSession(state);
 });
 
-// Menu Open
+// Open Menu
 document.getElementById('open-menu-btn').addEventListener('click', () => {
     document.getElementById('center-overlay').classList.remove('hidden');
-    // Check if we have a save to show the resume button
     if(loadSavedState()) {
         document.getElementById('resume-btn-container').style.display = 'block';
     }
@@ -279,85 +302,48 @@ function fetchPlaylistData() {
     const playlistIds = player.getPlaylist();
     const container = document.getElementById('playlist-items-container');
     container.innerHTML = '';
-    
-    if (!playlistIds || playlistIds.length === 0) {
-        container.innerHTML = '<div style="padding:20px; text-align:center;">Playlist info unavailable</div>';
-        return;
-    }
-
+    if (!playlistIds || playlistIds.length === 0) { container.innerHTML = '<div style="padding:20px; text-align:center;">Playlist info unavailable</div>'; return; }
     playlistIds.forEach((vidId, index) => {
         const div = document.createElement('div'); div.className = 'track-item'; div.id = 'track-' + index;
         div.onclick = () => { player.playVideoAt(index); updateActiveTrack(index); };
-        
         const img = document.createElement('img'); img.src = `https://i.ytimg.com/vi/${vidId}/mqdefault.jpg`; img.className = 'track-thumb';
         const info = document.createElement('div'); info.className = 'track-info'; info.innerText = `Track #${index + 1}`;
-        
         div.appendChild(img); div.appendChild(info); container.appendChild(div);
     });
     updateActiveTrack();
 }
-
 function updateActiveTrack(forceIndex = -1) {
     if(!isPlaylist) return;
     document.querySelectorAll('.track-item').forEach(el => el.classList.remove('active'));
-    
     let currentIndex = 0;
     try { currentIndex = (forceIndex >= 0) ? forceIndex : player.getPlaylistIndex(); } catch(e) {}
-    
     const activeEl = document.getElementById('track-' + currentIndex);
-    if (activeEl) {
-        activeEl.classList.add('active');
-        if(document.getElementById('playlist-drawer').classList.contains('open')) {
-            activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-    }
+    if (activeEl) { activeEl.classList.add('active'); if(document.getElementById('playlist-drawer').classList.contains('open')) activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 }
-
-// Drawer Toggles
 function closeDrawer() { document.getElementById('playlist-drawer').classList.remove('open'); document.getElementById('playlist-btn').classList.remove('active'); }
 document.getElementById('playlist-btn').addEventListener('click', () => {
-    const drawer = document.getElementById('playlist-drawer');
-    const btn = document.getElementById('playlist-btn');
-    if (drawer.classList.contains('open')) { closeDrawer(); } 
-    else { drawer.classList.add('open'); btn.classList.add('active'); updateActiveTrack(); }
+    const drawer = document.getElementById('playlist-drawer'); const btn = document.getElementById('playlist-btn');
+    if (drawer.classList.contains('open')) { closeDrawer(); } else { drawer.classList.add('open'); btn.classList.add('active'); updateActiveTrack(); }
 });
 document.getElementById('close-drawer-btn').addEventListener('click', closeDrawer);
 
-// --- 7. SCRUBBER ---
+// Scrubber
 const progressBar = document.getElementById('progress-bar');
 const currTimeEl = document.getElementById('curr-time');
 const totalTimeEl = document.getElementById('total-time');
-
 function startProgressLoop() {
     if(updateInterval) clearInterval(updateInterval);
     updateInterval = setInterval(() => {
         if (!player || !player.getCurrentTime || isDraggingScrubber) return;
-        try {
-            if (player.getPlayerState() === YT.PlayerState.PLAYING) {
-                const current = player.getCurrentTime(); const duration = player.getDuration();
-                if (duration) {
-                    progressBar.value = (current / duration) * 100;
-                    currTimeEl.innerText = formatTime(current);
-                    totalTimeEl.innerText = formatTime(duration);
-                }
-            }
-        } catch(e){}
+        try { if (player.getPlayerState() === YT.PlayerState.PLAYING) {
+            const current = player.getCurrentTime(); const duration = player.getDuration();
+            if (duration) { progressBar.value = (current / duration) * 100; currTimeEl.innerText = formatTime(current); totalTimeEl.innerText = formatTime(duration); }
+        }} catch(e){}
     }, 500);
 }
-
 progressBar.addEventListener('input', () => { isDraggingScrubber = true; });
-progressBar.addEventListener('change', (e) => {
-    isDraggingScrubber = false;
-    if(player) {
-        player.seekTo(player.getDuration() * (e.target.value / 100), true);
-        saveState();
-    }
-});
-
-// Helpers
+progressBar.addEventListener('change', (e) => { isDraggingScrubber = false; if(player) { player.seekTo(player.getDuration() * (e.target.value / 100), true); saveState(); } });
 function formatTime(s) { if (!s) return "00:00"; s = Math.floor(s); return `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`; }
 function showToast(msg) { const toast = document.getElementById('toast-msg'); toast.innerText = msg; toast.style.opacity = 1; setTimeout(() => { toast.style.opacity = 0; }, 3000); }
 let idleTimer; document.onmousemove = function() { document.body.classList.remove('idle'); clearTimeout(idleTimer); idleTimer = setTimeout(() => document.body.classList.add('idle'), 3000); };
-
-// Force save on close
 window.addEventListener('beforeunload', () => { saveState(); });
