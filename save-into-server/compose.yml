@@ -1,0 +1,59 @@
+services:
+  yt_restream:
+    container_name: local_yt_restream
+    # build: .
+    image: yt_restream_docker
+    ports:
+      - "3100:3100"
+    volumes:
+      # This maps the session.db file inside the container to your host machine
+      # so your playlist progress is saved even if you delete the container.
+      - ./session.db:/app/session.db
+    restart: unless-stopped
+```
+
+---
+
+### 🚀 How to Deploy
+
+#### Step 1: Prepare the Database File
+Docker has a quirk: if you map a file that doesn't exist yet, it creates a *folder* instead of a file, which crashes the app. You must create an empty file first.
+
+* **Mac/Linux:**
+    ```bash
+    touch session.db
+    ```
+* **Windows (PowerShell):**
+    ```powershell
+    New-Item -ItemType File session.db
+    ```
+* **Windows (CMD):**
+    ```cmd
+    type nul > session.db
+    ```
+
+#### Step 2: Build and Run
+Open your terminal in the folder and run:
+
+```bash
+docker-compose up -d --build
+```
+
+* `-d`: Runs in "Detached" mode (background).
+* `--build`: Forces Docker to rebuild the image (useful if you changed code).
+
+#### Step 3: Access
+Go to **`http://localhost:3000`**.
+
+---
+
+### 🛠️ Useful Docker Commands
+
+**Stop the server:**
+```bash
+docker-compose down
+```
+
+**View Logs (Debug issues):**
+```bash
+docker-compose logs -f

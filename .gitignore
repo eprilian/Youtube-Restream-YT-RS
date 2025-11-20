@@ -2,6 +2,7 @@
 node_modules/
 
 # Local Database (Session Data)
+session
 session.db
 
 # Package Manager Files
