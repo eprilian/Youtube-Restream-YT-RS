@@ -22,7 +22,7 @@ var updateInterval;
 var isDraggingScrubber = false;
 var isPlaylist = false;
 var activeConfig = null;
-const STORAGE_KEY = 'streamhost_play';
+const STORAGE_KEY = 'streamhost_last_time';
 
 // --- 4. LOCAL STORAGE PERSISTENCE ---
 
@@ -138,13 +138,35 @@ function onPlayerReady(event) {
         closeDrawer();
     }
 
-    // --- HEARTBEAT: SAVE EVERY 1 SECOND WHILE PLAYING ---
-    // This ensures progress is saved constantly to LocalStorage
+    // // --- HEARTBEAT: SAVE EVERY 1 SECOND WHILE PLAYING ---
+    // // This ensures progress is saved constantly to LocalStorage
+    // setInterval(() => {
+    //     if (player && player.getPlayerState && player.getPlayerState() === 1) { // 1 = Playing
+    //         saveState();
+    //     }
+    // }, 1000);
+
+    // --- HEARTBEAT & INDEX WATCHER ---
     setInterval(() => {
-        if (player && player.getPlayerState && player.getPlayerState() === 1) { // 1 = Playing
-            saveState();
+        if (player && player.getPlayerState) {
+            // 1. Standard Heartbeat (Save time while playing)
+            if (player.getPlayerState() === 1) { 
+                saveState();
+            }
+            
+            // 2. Playlist Index Watcher (Save immediately if track changes)
+            if (isPlaylist) {
+                const actualIndex = player.getPlaylistIndex();
+                if (actualIndex !== -1 && actualIndex !== lastKnownPlaylistIndex) {
+                    console.log("Track changed detected. Saving state.");
+                    lastKnownPlaylistIndex = actualIndex;
+                    saveState(); // Force save
+                    updateActiveTrack(); // Update UI sidebar
+                }
+            }
         }
-    }, 1000);
+    }, 1000);    
+
     // ----------------------------------------------------
 }
 

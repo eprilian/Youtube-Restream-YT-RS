@@ -163,11 +163,32 @@ function onPlayerReady(event) {
         closeDrawer();
     }
 
-    // --- HEARTBEAT FUNCTIONALITY ---
-    // This saves the playback position to the server every 1 second (Tight Sync)
+    // // --- HEARTBEAT FUNCTIONALITY ---
+    // // This saves the playback position to the server every 1 second (Tight Sync)
+    // setInterval(() => {
+    //     // if (player && player.getPlayerState && player.getPlayerState() === 1) { // 1 = Playing
+    //     //     broadcastState();
+    //     // }
+    // }, 1000);
+
+    // --- HEARTBEAT & INDEX WATCHER ---
     setInterval(() => {
-        if (player && player.getPlayerState && player.getPlayerState() === 1) { // 1 = Playing
-            broadcastState();
+        if (player && player.getPlayerState) {
+            // 1. Standard Heartbeat (Save time while playing)
+            if (player.getPlayerState() === 1) { 
+                saveState();
+            }
+            
+            // 2. Playlist Index Watcher (Save immediately if track changes)
+            if (isPlaylist) {
+                const actualIndex = player.getPlaylistIndex();
+                if (actualIndex !== -1 && actualIndex !== lastKnownPlaylistIndex) {
+                    console.log("Track changed detected. Saving state.");
+                    lastKnownPlaylistIndex = actualIndex;
+                    saveState(); // Force save
+                    updateActiveTrack(); // Update UI sidebar
+                }
+            }
         }
     }, 1000);
     // -------------------------------
