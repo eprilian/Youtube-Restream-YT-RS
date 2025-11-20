@@ -29,14 +29,18 @@ var isRemoteUpdate = false;
 
 // Receive update from Server
 socket.on('sync_event', (state) => {
-    console.log("Remote Update:", state);
+    // Prevent loops: If we are receiving an update, don't send one back immediately
     isRemoteUpdate = true;
+    
+    console.log("Remote Update:", state);
     
     // A. If video ID is different, reload everything
     if (!activeConfig || activeConfig.id !== state.config.id) {
         showToast("Remote changed video...");
         initPlayer(state.config);
         document.getElementById('center-overlay').classList.add('hidden');
+        // Reset flag after a delay to allow player to load
+        setTimeout(() => { isRemoteUpdate = false; }, 1000);
         return;
     }
     
@@ -52,7 +56,8 @@ socket.on('sync_event', (state) => {
         if (state.status === 2 && player.getPlayerState() !== 2) player.pauseVideo();
     }
 
-    isRemoteUpdate = false;
+    // Reset flag
+    setTimeout(() => { isRemoteUpdate = false; }, 500);
 });
 
 // Send update to Server
@@ -75,9 +80,10 @@ async function loadInitialState() {
         const state = await res.json();
         if(state && state.config) {
             console.log("Loading saved state from server...");
+            
             // Ensure we start at the saved timestamp
             state.config.startSeconds = state.timestamp;
-            state.config.playlistIndex = state.playlistIndex; // Restore playlist position
+            state.config.playlistIndex = state.playlistIndex; 
             
             initPlayer(state.config);
             document.getElementById('center-overlay').classList.add('hidden');
@@ -156,6 +162,15 @@ function onPlayerReady(event) {
         plBtn.style.display = 'none';
         closeDrawer();
     }
+
+    // --- HEARTBEAT FUNCTIONALITY ---
+    // This saves the playback position to the server every 1 second (Tight Sync)
+    setInterval(() => {
+        if (player && player.getPlayerState && player.getPlayerState() === 1) { // 1 = Playing
+            broadcastState();
+        }
+    }, 1000);
+    // -------------------------------
 }
 
 function onPlayerStateChange(event) {
@@ -343,3 +358,6 @@ progressBar.addEventListener('change', (e) => {
 function formatTime(s) { if (!s) return "00:00"; s = Math.floor(s); return `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`; }
 function showToast(msg) { const toast = document.getElementById('toast-msg'); toast.innerText = msg; toast.style.opacity = 1; setTimeout(() => { toast.style.opacity = 0; }, 3000); }
 let idleTimer; document.onmousemove = function() { document.body.classList.remove('idle'); clearTimeout(idleTimer); idleTimer = setTimeout(() => document.body.classList.add('idle'), 3000); };
+
+// Force save on close
+window.addEventListener('beforeunload', () => { broadcastState(); });
