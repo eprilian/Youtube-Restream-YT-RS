@@ -24,9 +24,9 @@ Follow these steps to set up the project structure correctly.
 
 ### **1\. Create Project Folder**
 
-Create a folder named StreamHost and set up the following file structure:
+Create a folder named Youtube Restream (YT-RS) and set up the following file structure:
 
-StreamHost/  
+Youtube Restream (YT-RS)/  
 ├── package.json       (Created automatically in Step 2\)  
 ├── server.js          (The Backend code)  
 ├── index.html         (The Frontend structure)  
@@ -36,7 +36,7 @@ StreamHost/
 
 ### **2\. Initialize Project**
 
-Open your terminal/command prompt inside the StreamHost folder and run:
+Open your terminal/command prompt inside the Youtube Restream (YT-RS) folder and run:
 
 npm init \-y
 
@@ -48,13 +48,13 @@ npm install express socket.io sqlite3 body-parser cors
 
 ## **🚀 How to Run**
 
-1. Open your terminal in the StreamHost folder.  
+1. Open your terminal in the Youtube Restream (YT-RS) folder.  
 2. Start the server:
 
 node server.js
 
 3. You should see the message:  
-   \>\> StreamHost running at http://localhost:3000  
+   \>\> Youtube Restream (YT-RS) running at http://localhost:3000  
 4. Open your web browser and go to:  
    http://localhost:3000
 

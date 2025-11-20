@@ -3,7 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StreamHost Lite</title>
+    <title>Youtube Restream (YT-RS)</title>
+
+    <!-- Link to Youtube icon -->
+    <link rel="shortcut icon" href="https://www.youtube.com/s/desktop/181af002/img/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="https://www.youtube.com/s/desktop/181af002/img/favicon_32x32.png" sizes="32x32">
+    <link rel="icon" href="https://www.youtube.com/s/desktop/181af002/img/favicon_48x48.png" sizes="48x48">
+    <link rel="icon" href="https://www.youtube.com/s/desktop/181af002/img/favicon_96x96.png" sizes="96x96">
+    <link rel="icon" href="https://www.youtube.com/s/desktop/181af002/img/favicon_144x144.png" sizes="144x144">
     
     <!-- Link to CSS -->
     <link rel="stylesheet" href="static/style.css">
@@ -16,12 +23,12 @@
     </div>
     
     <!-- Toast Notification -->
-    <div id="toast-msg">Notification</div>
+    <div id="toast-msg">Notif</div>
 
     <!-- Playlist Sidebar -->
     <div id="playlist-drawer">
         <div class="playlist-header">
-            <span>PLAYLIST</span>
+            <span>Playlist</span>
             <span class="close-drawer" id="close-drawer-btn">&times;</span>
         </div>
         <div class="playlist-items" id="playlist-items-container">
@@ -32,7 +39,7 @@
     <!-- Center Loader Overlay -->
     <div id="center-overlay">
         <div class="input-box">
-            <h2>MEDIA LOADER</h2>
+            <h2>Youtube Restream</h2>
             <div class="input-row">
                 <input type="text" class="url-field" id="url-input" placeholder="Paste YouTube Link">
                 <select id="initial-quality" class="quality-pre-select">
@@ -42,7 +49,7 @@
                     <option value="large">480p</option>
                 </select>
             </div>
-            <button class="load-btn" id="load-btn">LOAD SOURCE</button>
+            <button class="load-btn" id="load-btn">Play Videos</button>
             <div id="resume-btn-container" style="display:none; margin-top:15px;">
                 <small style="color:#666;">or</small><br>
                 <button id="resume-btn" class="load-btn" style="background:transparent; border:1px solid #555; margin-top:5px;">RESUME SESSION</button>
