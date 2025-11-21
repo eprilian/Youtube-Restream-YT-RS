@@ -14,7 +14,7 @@ var firstScriptTag = document.getElementsByTagName('script')[0]; firstScriptTag.
 const socket = io(); 
 var player, isPlayerReady = false, updateInterval, isDraggingScrubber = false, isPlaylist = false;
 var activeConfig = null, isRemoteUpdate = false;
-var lastKnownPlaylistIndex = -1; // Track playlist changes
+var lastKnownPlaylistIndex = -1;
 
 // --- 4. SOCKET SYNC ---
 socket.on('sync_event', (state) => {
@@ -46,6 +46,9 @@ socket.on('sync_event', (state) => {
         if (state.status === 2 && player.getPlayerState() !== 2) player.pauseVideo();
     }
 
+    // Note: We DO NOT sync volume here (local preference preference usually), 
+    // but it is saved to DB for next reload.
+
     setTimeout(() => { isRemoteUpdate = false; }, 500);
 });
 
@@ -55,9 +58,12 @@ function broadcastState() {
     const state = {
         config: activeConfig,
         timestamp: player.getCurrentTime(),
-        duration: player.getDuration(), // Critical for Live Mode Loop
+        duration: player.getDuration(),
         status: player.getPlayerState(),
-        playlistIndex: isPlaylist ? player.getPlaylistIndex() : 0
+        playlistIndex: isPlaylist ? player.getPlaylistIndex() : 0,
+        // SAVE VOLUME TO DB
+        volume: player.getVolume(),
+        muted: player.isMuted()
     };
     socket.emit('update_state', state);
 }
@@ -71,6 +77,10 @@ async function loadInitialState() {
             console.log("Restoring session...");
             state.config.startSeconds = state.timestamp;
             state.config.playlistIndex = state.playlistIndex;
+            
+            // Inject volume into config for initPlayer to use
+            state.config.startVolume = state.volume;
+            state.config.startMuted = state.muted;
             
             initPlayer(state.config);
             document.getElementById('center-overlay').classList.add('hidden');
@@ -87,7 +97,6 @@ function initPlayer(config) {
     activeConfig = config;
     lastKnownPlaylistIndex = config.playlistIndex || 0;
 
-    // UI Updates
     document.getElementById('url-input').value = ""; 
     document.getElementById('mode-indicator').innerText = config.mode || "RESUME";
     if(config.quality) document.getElementById('initial-quality').value = config.quality;
@@ -116,24 +125,31 @@ function initPlayer(config) {
 function onPlayerReady(event) {
     isPlayerReady = true;
     startProgressLoop();
-    player.unMute();
+    
+    // Restore Volume
+    const startVol = (activeConfig.startVolume !== undefined) ? activeConfig.startVolume : 100;
+    player.setVolume(startVol);
+    document.getElementById('vol-slider').value = startVol;
+    
+    if (activeConfig.startMuted) {
+        player.mute();
+        updateVolumeUI(true);
+    } else {
+        player.unMute();
+        updateVolumeUI(false);
+    }
     
     if(activeConfig.quality && activeConfig.quality !== 'auto') player.setPlaybackQuality(activeConfig.quality);
 
     const plBtn = document.getElementById('playlist-btn');
     if (isPlaylist) { plBtn.style.display = 'block'; setTimeout(fetchPlaylistData, 2000); } else { plBtn.style.display = 'none'; closeDrawer(); }
 
-    // --- HEARTBEAT & PLAYLIST WATCHER ---
     setInterval(() => {
         if (player && player.getPlayerState) {
-            // 1. Save every second while playing
             if (player.getPlayerState() === 1) broadcastState();
-            
-            // 2. Detect Playlist Track Change immediately
             if (isPlaylist) {
                 const actualIndex = player.getPlaylistIndex();
                 if (actualIndex !== -1 && actualIndex !== lastKnownPlaylistIndex) {
-                    console.log("Track change detected. Saving.");
                     lastKnownPlaylistIndex = actualIndex;
                     broadcastState();
                     updateActiveTrack();
@@ -157,10 +173,7 @@ function onPlayerStateChange(event) {
         iconPlay.style.display = 'block'; iconPause.style.display = 'none';
         broadcastState();
     }
-    else if (event.data == YT.PlayerState.BUFFERING) {
-        // Save on buffer (playlist changes often trigger this)
-        broadcastState();
-    }
+    else if (event.data == YT.PlayerState.BUFFERING) { broadcastState(); }
     else { iconPlay.style.display = 'block'; iconPause.style.display = 'none'; }
 }
 
@@ -170,7 +183,7 @@ document.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
     if (key === 'f') toggleFullscreen();
     if (key === 'k' || e.code === 'Space') { e.preventDefault(); if(player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo(); }
-    if (key === 'm') { if(player.isMuted()) { player.unMute(); showToast("Unmuted"); } else { player.mute(); showToast("Muted"); } }
+    if (key === 'm') { if(player.isMuted()) { player.unMute(); updateVolumeUI(false); showToast("Unmuted"); } else { player.mute(); updateVolumeUI(true); showToast("Muted"); } }
     if (e.code === 'ArrowRight') { player.seekTo(player.getCurrentTime() + 10); showToast("+10s"); broadcastState(); }
     if (e.code === 'ArrowLeft') { player.seekTo(player.getCurrentTime() - 10); showToast("-10s"); broadcastState(); }
 });
@@ -179,45 +192,53 @@ document.getElementById('play-btn').addEventListener('click', () => { if(player.
 document.getElementById('prev-btn').addEventListener('click', () => { if(player.previousVideo) player.previousVideo(); else player.seekTo(0); broadcastState(); });
 document.getElementById('next-btn').addEventListener('click', () => { if(player.nextVideo) player.nextVideo(); broadcastState(); });
 
-// LOAD BUTTON
 document.getElementById('load-btn').addEventListener('click', () => {
     const url = document.getElementById('url-input').value;
     const quality = document.getElementById('initial-quality').value;
-    const mode = document.querySelector('input[name="playmode"]:checked').value; // Get Mode
-    
+    const mode = document.querySelector('input[name="playmode"]:checked').value;
     if (!url) return;
-    
     const listMatch = url.match(/[?&]list=([^#\&\?]+)/);
     const vidMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
-
     let config;
     if (listMatch) config = { type: 'playlist', id: listMatch[1], quality: quality, mode: mode };
     else if (vidMatch) config = { type: 'video', id: vidMatch[1], quality: quality, mode: mode };
     else { showToast("Invalid Link"); return; }
-
     initPlayer(config);
     activeConfig = config;
-    setTimeout(broadcastState, 2000); // Force initial save
+    setTimeout(broadcastState, 2000);
     document.getElementById('center-overlay').classList.add('hidden');
 });
 
 document.getElementById('open-menu-btn').addEventListener('click', () => { document.getElementById('center-overlay').classList.remove('hidden'); });
 
+// Volume Logic
+const volSlider = document.getElementById('vol-slider');
+const muteBtn = document.getElementById('mute-btn');
+const iconVolHigh = document.getElementById('icon-vol-high');
+const iconVolMute = document.getElementById('icon-vol-mute');
+
+function updateVolumeUI(isMuted) {
+    if (isMuted) { iconVolHigh.style.display = 'none'; iconVolMute.style.display = 'block'; volSlider.value = 0; }
+    else { iconVolHigh.style.display = 'block'; iconVolMute.style.display = 'none'; volSlider.value = player.getVolume(); }
+    broadcastState(); // Save volume change
+}
+
+muteBtn.addEventListener('click', () => { if (player.isMuted()) { player.unMute(); updateVolumeUI(false); } else { player.mute(); updateVolumeUI(true); } });
+volSlider.addEventListener('input', (e) => { 
+    const val = e.target.value; player.setVolume(val); 
+    if(val > 0 && player.isMuted()) player.unMute();
+    updateVolumeUI(player.isMuted()); 
+});
+
 const fsBtn = document.getElementById('fullscreen-btn');
 function toggleFullscreen() { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else if (document.exitFullscreen) document.exitFullscreen(); }
-function updateFsIcon() {
-    const enter = document.getElementById('icon-fs-enter'); const exit = document.getElementById('icon-fs-exit');
-    if (document.fullscreenElement) { enter.style.display = 'none'; exit.style.display = 'block'; } else { enter.style.display = 'block'; exit.style.display = 'none'; }
-}
-fsBtn.addEventListener('click', toggleFullscreen);
-document.addEventListener('fullscreenchange', updateFsIcon);
+function updateFsIcon() { const enter = document.getElementById('icon-fs-enter'); const exit = document.getElementById('icon-fs-exit'); if (document.fullscreenElement) { enter.style.display = 'none'; exit.style.display = 'block'; } else { enter.style.display = 'block'; exit.style.display = 'none'; } }
+fsBtn.addEventListener('click', toggleFullscreen); document.addEventListener('fullscreenchange', updateFsIcon);
 
-// Playlist Functions
 function fetchPlaylistData() {
     if (!player || !player.getPlaylist) return;
     const playlistIds = player.getPlaylist();
-    const container = document.getElementById('playlist-items-container');
-    container.innerHTML = '';
+    const container = document.getElementById('playlist-items-container'); container.innerHTML = '';
     if (!playlistIds || playlistIds.length === 0) { container.innerHTML = '<div style="padding:20px; text-align:center;">Playlist info unavailable</div>'; return; }
     playlistIds.forEach((vidId, index) => {
         const div = document.createElement('div'); div.className = 'track-item'; div.id = 'track-' + index;
@@ -228,7 +249,6 @@ function fetchPlaylistData() {
     });
     updateActiveTrack();
 }
-
 function updateActiveTrack(forceIndex = -1) {
     if(!isPlaylist) return;
     document.querySelectorAll('.track-item').forEach(el => el.classList.remove('active'));
@@ -237,15 +257,10 @@ function updateActiveTrack(forceIndex = -1) {
     const activeEl = document.getElementById('track-' + currentIndex);
     if (activeEl) { activeEl.classList.add('active'); if(document.getElementById('playlist-drawer').classList.contains('open')) activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 }
-
 function closeDrawer() { document.getElementById('playlist-drawer').classList.remove('open'); document.getElementById('playlist-btn').classList.remove('active'); }
-document.getElementById('playlist-btn').addEventListener('click', () => {
-    const drawer = document.getElementById('playlist-drawer'); const btn = document.getElementById('playlist-btn');
-    if (drawer.classList.contains('open')) { closeDrawer(); } else { drawer.classList.add('open'); btn.classList.add('active'); updateActiveTrack(); }
-});
+document.getElementById('playlist-btn').addEventListener('click', () => { const drawer = document.getElementById('playlist-drawer'); const btn = document.getElementById('playlist-btn'); if (drawer.classList.contains('open')) { closeDrawer(); } else { drawer.classList.add('open'); btn.classList.add('active'); updateActiveTrack(); } });
 document.getElementById('close-drawer-btn').addEventListener('click', closeDrawer);
 
-// Scrubber
 const progressBar = document.getElementById('progress-bar');
 const currTimeEl = document.getElementById('curr-time');
 const totalTimeEl = document.getElementById('total-time');
@@ -261,7 +276,6 @@ function startProgressLoop() {
 }
 progressBar.addEventListener('input', () => { isDraggingScrubber = true; });
 progressBar.addEventListener('change', (e) => { isDraggingScrubber = false; if(player) { player.seekTo(player.getDuration() * (e.target.value / 100), true); broadcastState(); } });
-
 function formatTime(s) { if (!s) return "00:00"; s = Math.floor(s); return `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`; }
 function showToast(msg) { const toast = document.getElementById('toast-msg'); toast.innerText = msg; toast.style.opacity = 1; setTimeout(() => { toast.style.opacity = 0; }, 3000); }
 let idleTimer; document.onmousemove = function() { document.body.classList.remove('idle'); clearTimeout(idleTimer); idleTimer = setTimeout(() => document.body.classList.add('idle'), 3000); };

@@ -55,6 +55,11 @@ button.icon-btn svg { width: 28px; height: 28px; fill: currentColor; }
 .time-display { font-size: 0.9rem; font-family: monospace; color: #ddd; margin-left: 10px; }
 #playlist-btn.active svg { fill: #cc0000; }
 #mode-indicator { font-size: 0.8rem; color: #aaa; margin-right: 10px; text-transform: uppercase; font-weight: bold; }
+
+/* VOLUME STYLES */
+.volume-control { display: flex; align-items: center; gap: 5px; }
+.vol-slider { width: 70px; accent-color: white; height: 3px; cursor: pointer; }
+
 .live-clock { position: absolute; left: 50%; transform: translateX(-50%); font-family: 'Courier New', Courier, monospace; font-size: 1.2rem; font-weight: bold; color: #eee; letter-spacing: 1px; text-shadow: 0 0 10px rgba(0,0,0,0.8); pointer-events: none; }
 body.idle #controls-layer { opacity: 0; }
 body.idle { cursor: none; }

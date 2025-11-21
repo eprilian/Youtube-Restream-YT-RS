@@ -1,31 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Youtube Restream (YT-RS)</title>
 
-    <!-- Link to Youtube icon -->
     <link rel="shortcut icon" href="https://www.youtube.com/s/desktop/181af002/img/favicon.ico" type="image/x-icon">
     <link rel="icon" href="https://www.youtube.com/s/desktop/181af002/img/favicon_32x32.png" sizes="32x32">
     <link rel="icon" href="https://www.youtube.com/s/desktop/181af002/img/favicon_48x48.png" sizes="48x48">
     <link rel="icon" href="https://www.youtube.com/s/desktop/181af002/img/favicon_96x96.png" sizes="96x96">
     <link rel="icon" href="https://www.youtube.com/s/desktop/181af002/img/favicon_144x144.png" sizes="144x144">
-    
-    <!-- Link to CSS -->
+
     <link rel="stylesheet" href="static/style.css">
 </head>
+
 <body>
 
-    <!-- Video Background -->
     <div id="player-wrapper">
         <div id="video-placeholder"></div>
     </div>
-    
-    <!-- Toast Notification -->
+
     <div id="toast-msg">Notif</div>
 
-    <!-- Playlist Sidebar -->
     <div id="playlist-drawer">
         <div class="playlist-header">
             <span>Playlist</span>
@@ -36,12 +33,10 @@
         </div>
     </div>
 
-    <!-- Center Loader Overlay -->
     <div id="center-overlay">
         <div class="input-box">
             <h2>Youtube Restream</h2>
-            
-            <!-- Input Row -->
+
             <div class="input-row">
                 <input type="text" class="url-field" id="url-input" placeholder="Paste YouTube Link">
                 <select id="initial-quality" class="quality-pre-select">
@@ -53,7 +48,6 @@
                 </select>
             </div>
 
-            <!-- Mode Switch (New) -->
             <div class="mode-select-container">
                 <label class="mode-btn active">
                     <input type="radio" name="playmode" value="resume" checked>
@@ -66,15 +60,15 @@
             </div>
 
             <button class="load-btn" id="load-btn">Play Videos</button>
-            
+
             <div id="resume-btn-container" style="display:none; margin-top:15px;">
                 <small style="color:#666;">or</small><br>
-                <button id="resume-btn" class="load-btn" style="background:transparent; border:1px solid #555; margin-top:5px;">RESUME LAST SESSION</button>
+                <button id="resume-btn" class="load-btn"
+                    style="background:transparent; border:1px solid #555; margin-top:5px;">RESUME LAST SESSION</button>
             </div>
         </div>
     </div>
 
-    <!-- Control Bar -->
     <div id="controls-layer">
         <div class="progress-container">
             <input type="range" class="scrubber" id="progress-bar" value="0" min="0" max="100" step="0.1">
@@ -83,41 +77,73 @@
         <div class="buttons-row">
             <!-- Left Controls -->
             <div class="left-controls">
-                <button class="icon-btn" id="prev-btn"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
+                <button class="icon-btn" id="prev-btn"><svg viewBox="0 0 24 24">
+                        <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+                    </svg></button>
                 <button class="icon-btn" id="play-btn">
-                    <svg id="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                    <svg id="icon-pause" style="display:none;" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                    <svg id="icon-play" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z" />
+                    </svg>
+                    <svg id="icon-pause" style="display:none;" viewBox="0 0 24 24">
+                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                    </svg>
                 </button>
-                <button class="icon-btn" id="next-btn"><svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
+                <button class="icon-btn" id="next-btn"><svg viewBox="0 0 24 24">
+                        <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+                    </svg></button>
+
+                <div class="volume-control">
+                    <button class="icon-btn" id="mute-btn">
+                        <svg id="icon-vol-high" viewBox="0 0 24 24">
+                            <path
+                                d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+                        </svg>
+                        <svg id="icon-vol-mute" style="display:none;" viewBox="0 0 24 24">
+                            <path
+                                d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73 4.27 3zM12 4L9.91 6.09 12 8.18V4z" />
+                        </svg>
+                    </button>
+                    <input type="range" id="vol-slider" class="vol-slider" min="0" max="100" value="100">
+                </div>
+
                 <div class="time-display"><span id="curr-time">00:00</span> / <span id="total-time">00:00</span></div>
             </div>
 
-            <!-- Center Clock -->
             <div id="live-clock" class="live-clock">12:00:00 PM</div>
 
             <!-- Right Controls -->
             <div class="right-controls">
-                <!-- Mode Indicator -->
-                <div id="mode-indicator" style="font-size:0.8rem; color:#aaa; margin-right:10px; text-transform:uppercase; font-weight:bold;">RESUME</div>
+                <div id="mode-indicator"
+                    style="font-size:0.8rem; color:#aaa; margin-right:10px; text-transform:uppercase; font-weight:bold;">
+                    RESUME</div>
 
                 <button class="icon-btn" id="playlist-btn" style="display:none;" title="Playlist">
-                    <svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+                    <svg viewBox="0 0 24 24">
+                        <path
+                            d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z" />
+                    </svg>
                 </button>
-                
+
                 <button class="icon-btn" id="fullscreen-btn" title="Fullscreen (F)">
-                    <svg id="icon-fs-enter" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
-                    <svg id="icon-fs-exit" style="display:none;" viewBox="0 0 24 24"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>
+                    <svg id="icon-fs-enter" viewBox="0 0 24 24">
+                        <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
+                    </svg>
+                    <svg id="icon-fs-exit" style="display:none;" viewBox="0 0 24 24">
+                        <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z" />
+                    </svg>
                 </button>
 
                 <button class="icon-btn" id="open-menu-btn" title="New Source">
-                    <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                    <svg viewBox="0 0 24 24">
+                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                    </svg>
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Logic Script -->
     <script src="static/script.js"></script>
-    
+
 </body>
+
 </html>

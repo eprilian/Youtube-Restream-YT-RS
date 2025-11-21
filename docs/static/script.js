@@ -38,11 +38,13 @@ function saveState() {
         }
 
         const currentState = {
-            config: activeConfig, // contains 'mode'
+            config: activeConfig,
             timestamp: player.getCurrentTime(),
-            duration: player.getDuration(), // IMPORTANT: Save total duration for loop math
+            duration: player.getDuration(),
             playlistIndex: currentIndex,
-            lastSaved: Date.now() // Save exact real-world time
+            lastSaved: Date.now(),
+            volume: player.getVolume(),
+            muted: player.isMuted()
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(currentState));
         
@@ -86,6 +88,9 @@ function restoreSession(state) {
 
     state.config.startSeconds = startSeconds;
     state.config.playlistIndex = state.playlistIndex;
+
+    state.config.startVolume = state.volume;
+    state.config.startMuted = state.muted;
     
     // Update UI
     document.getElementById('url-input').value = ""; 
@@ -156,7 +161,18 @@ function initPlayer(config) {
 function onPlayerReady(event) {
     isPlayerReady = true;
     startProgressLoop();
-    player.unMute();
+
+    const startVol = (activeConfig.startVolume !== undefined) ? activeConfig.startVolume : 100;
+    player.setVolume(startVol);
+    document.getElementById('vol-slider').value = startVol;
+    
+    if (activeConfig.startMuted) {
+        player.mute();
+        updateVolumeUI(true);
+    } else {
+        player.unMute();
+        updateVolumeUI(false);
+    }
     
     if(activeConfig.quality && activeConfig.quality !== 'auto') {
         player.setPlaybackQuality(activeConfig.quality);
@@ -279,6 +295,24 @@ document.getElementById('open-menu-btn').addEventListener('click', () => {
     if(loadSavedState()) {
         document.getElementById('resume-btn-container').style.display = 'block';
     }
+});
+
+const volSlider = document.getElementById('vol-slider');
+const muteBtn = document.getElementById('mute-btn');
+const iconVolHigh = document.getElementById('icon-vol-high');
+const iconVolMute = document.getElementById('icon-vol-mute');
+
+function updateVolumeUI(isMuted) {
+    if (isMuted) { iconVolHigh.style.display = 'none'; iconVolMute.style.display = 'block'; volSlider.value = 0; }
+    else { iconVolHigh.style.display = 'block'; iconVolMute.style.display = 'none'; volSlider.value = player.getVolume(); }
+    saveState(); // Save on volume change
+}
+
+muteBtn.addEventListener('click', () => { if (player.isMuted()) { player.unMute(); updateVolumeUI(false); } else { player.mute(); updateVolumeUI(true); } });
+volSlider.addEventListener('input', (e) => { 
+    const val = e.target.value; player.setVolume(val); 
+    if(val > 0 && player.isMuted()) player.unMute();
+    updateVolumeUI(player.isMuted()); 
 });
 
 // Fullscreen
